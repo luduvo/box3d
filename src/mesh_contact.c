@@ -1020,6 +1020,7 @@ bool b3ComputeMeshManifolds( b3World* world, int workerIndex, b3Contact* contact
 		b3Manifold* manifold = contact->manifolds + i;
 		manifold->pointCount = pointCount;
 		manifold->normal = b3MulMV( matrixB, cm->manifoldNormal );
+		manifold->persisted_mask = 0;
 
 		b3Vec3 clusterNormal = b3MulMV( matrixB, cm->manifoldNormal );
 		float bestDot = normalMatchTolerance;
@@ -1073,7 +1074,7 @@ bool b3ComputeMeshManifolds( b3World* world, int workerIndex, b3Contact* contact
 					if ( target->featureId == oldPt->featureId && target->triangleIndex == oldPt->triangleIndex )
 					{
 						target->normalImpulse = oldPt->normalImpulse;
-						target->persisted = true;
+						manifold->persisted_mask |= 1U << j;
 
 						// claimed
 						oldPt->triangleIndex = B3_NULL_INDEX;

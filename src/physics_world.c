@@ -699,6 +699,7 @@ static void b3CollideTask( int startIndex, int endIndex, int workerIndex, void* 
 						b3Vec3 normal = manifold->normal;
 
 						int pointCount = manifold->pointCount;
+						manifold->persisted_mask = 0;
 						for ( int pointIndex = 0; pointIndex < pointCount; ++pointIndex )
 						{
 							// Keep anchors but update separation, same as sub-stepping. This eliminates jitter.
@@ -707,7 +708,7 @@ static void b3CollideTask( int startIndex, int endIndex, int workerIndex, void* 
 							b3Vec3 rB = b3MulMV( matrixB, mp->anchorB );
 							b3Vec3 dp = b3Add( dc, b3Sub( rB, rA ) );
 							mp->separation = mp->baseSeparation + b3Dot( dp, normal );
-							mp->persisted = true;
+							manifold->persisted_mask |= 1U << pointIndex;
 						}
 					}
 
@@ -1537,7 +1538,7 @@ void b3World_Draw( b3WorldId worldId, b3DebugDraw* draw, uint64_t maskBits )
 									draw->DrawPointFcn( p, pointSize, graphColors[contact->colorIndex], draw->context );
 									// g_draw.DrawString(point->position, "%d", point->color);
 								}
-								else if ( mp->persisted == false )
+								else if ( !( manifold->persisted_mask & ( 1U << pointIndex ) ) )
 								{
 									// Add
 									draw->DrawPointFcn( p, 20.0f, addColor, draw->context );

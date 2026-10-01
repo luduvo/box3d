@@ -2586,9 +2586,6 @@ typedef struct b3ManifoldPoint
 
 	/// Triangle index if one of the shapes is a mesh or height field
 	int triangleIndex;
-
-	/// Did this contact point exist in the previous step?
-	bool persisted;
 } b3ManifoldPoint;
 
 /// A contact manifold describes the contact points between colliding shapes.
@@ -2612,6 +2609,9 @@ typedef struct b3Manifold
 
 	/// The number of contact points, will be 0 to 4
 	int pointCount;
+
+	uint8_t persisted_mask;
+	uint8_t pad[3];
 
 } b3Manifold;
 

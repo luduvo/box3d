@@ -15,6 +15,9 @@
 
 #include "box3d/box3d.h"
 
+_Static_assert( sizeof( b3Manifold ) == 256, "b3Manifold must be 256 bytes" );
+_Static_assert( sizeof( b3ManifoldPoint ) == 52, "b3ManifoldPoint must be 52 bytes" );
+
 // Contacts and determinism
 // A deterministic simulation requires contacts to exist in the same order in b3Island no matter the thread count.
 // The order must reproduce from run to run. This is necessary because the Gauss-Seidel constraint solver is order dependent.
@@ -576,11 +579,11 @@ static bool b3ComputeConvexManifold( b3World* world, int workerIndex, b3Contact*
 	}
 
 	// Copy impulses from old points
+	manifold->persisted_mask = 0;
 	for ( int i = 0; i < geomManifold.pointCount; ++i )
 	{
 		b3ManifoldPoint* pt2 = manifold->points + i;
 		pt2->totalNormalImpulse = 0.0f;
-		pt2->persisted = false;
 
 		for ( int j = 0; j < oldCount; ++j )
 		{
@@ -589,7 +592,7 @@ static bool b3ComputeConvexManifold( b3World* world, int workerIndex, b3Contact*
 			if ( pt2->featureId == pt1->featureId )
 			{
 				pt2->normalImpulse = pt1->normalImpulse;
-				pt2->persisted = true;
+				manifold->persisted_mask |= 1U << i;
 
 				// claimed
 				pt1->featureId = UINT32_MAX;
@@ -598,7 +601,7 @@ static bool b3ComputeConvexManifold( b3World* world, int workerIndex, b3Contact*
 			}
 		}
 
-		if ( pt2->persisted == false )
+		if ( !( manifold->persisted_mask & ( 1U << i ) ) )
 		{
 			pt2->normalImpulse = 0.0f;
 		}
