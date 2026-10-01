@@ -9,6 +9,9 @@ b3BlockAllocator b3CreateBlockAllocator( int elementSize, int initialCount )
 {
 	B3_ASSERT( elementSize >= (int)sizeof( void* ) );
 
+	int pointerMask = (int)sizeof( void* ) - 1;
+	elementSize = ( elementSize + pointerMask ) & ~pointerMask;
+
 	b3BlockAllocator allocator = { 0 };
 
 	b3Array_Create( allocator.blocks );
