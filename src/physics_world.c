@@ -1033,6 +1033,8 @@ void b3World_Step( b3WorldId worldId, float timeStep, int subStepCount )
 
 	B3_REC( world, Step, worldId, timeStep, subStepCount );
 
+	B3_ASSERT( world->broadPhase.staticBatch == false );
+
 	world->locked = true;
 
 	b3TracyCZoneNC( world_step, "Step", b3_colorBox2DGreen, true );
@@ -3481,8 +3483,38 @@ void b3World_RebuildStaticTree( b3WorldId worldId )
 
 	B3_REC( world, WorldRebuildStaticTree, worldId );
 
+	B3_ASSERT( world->broadPhase.staticBatch == false );
 	b3DynamicTree* staticTree = world->broadPhase.trees + b3_staticBody;
 	b3DynamicTree_Rebuild( staticTree, true );
+}
+
+void b3World_BeginStaticBatch( b3WorldId worldId )
+{
+	b3World* world = b3GetUnlockedWorldFromId( worldId );
+	if ( world == NULL )
+	{
+		return;
+	}
+
+	B3_REC( world, WorldBeginStaticBatch, worldId );
+
+	B3_ASSERT( world->broadPhase.staticBatch == false );
+	world->broadPhase.staticBatch = true;
+}
+
+void b3World_EndStaticBatch( b3WorldId worldId )
+{
+	b3World* world = b3GetUnlockedWorldFromId( worldId );
+	if ( world == NULL )
+	{
+		return;
+	}
+
+	B3_REC( world, WorldEndStaticBatch, worldId );
+
+	B3_ASSERT( world->broadPhase.staticBatch == true );
+	world->broadPhase.staticBatch = false;
+	b3DynamicTree_RebuildAll( world->broadPhase.trees + b3_staticBody );
 }
 
 void b3World_EnableSpeculative( b3WorldId worldId, bool flag )

@@ -24,6 +24,8 @@ B3_API void b3DynamicTree_Destroy( b3DynamicTree* tree );
 /// Create a proxy. Provide an AABB and a userData value.
 B3_API int b3DynamicTree_CreateProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData );
 
+B3_API int b3DynamicTree_CreateUnlinkedProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData );
+
 /// Destroy a proxy. This asserts if the id is invalid.
 B3_API void b3DynamicTree_DestroyProxy( b3DynamicTree* tree, int proxyId );
 
@@ -98,6 +100,8 @@ B3_API int b3DynamicTree_GetProxyCount( const b3DynamicTree* tree );
 
 /// Rebuild the tree while retaining subtrees that haven't changed. Returns the number of boxes sorted.
 B3_API int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild );
+
+B3_API int b3DynamicTree_RebuildAll( b3DynamicTree* tree );
 
 /// Get the number of bytes used by this tree
 B3_API int b3DynamicTree_GetByteCount( const b3DynamicTree* tree );

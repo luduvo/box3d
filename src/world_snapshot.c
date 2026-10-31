@@ -935,6 +935,8 @@ static void b3FreeLiveSimElements( b3World* world )
 
 int b3SerializeWorld( b3World* world, b3RecBuffer* buf, b3Recording* rec )
 {
+	B3_ASSERT( world->broadPhase.staticBatch == false );
+
 	int startSize = buf->size;
 
 	// Snapshot header

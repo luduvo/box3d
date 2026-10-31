@@ -28,6 +28,7 @@ void b3CreateBroadPhase( b3BroadPhase* bp, const b3Capacity* capacity )
 	bp->movePairCapacity = 0;
 	b3AtomicStoreInt( &bp->movePairIndex, 0 );
 	bp->pairSet = b3CreateSet( 2 * capacity->contactCount );
+	bp->staticBatch = false;
 
 	int staticCapacity = b3MaxInt( 16, capacity->staticShapeCount );
 	bp->trees[b3_staticBody] = b3DynamicTree_Create( staticCapacity );
@@ -86,7 +87,10 @@ int b3BroadPhase_CreateProxy( b3BroadPhase* bp, b3BodyType proxyType, b3AABB aab
 							  bool forcePairCreation )
 {
 	B3_ASSERT( 0 <= proxyType && proxyType < b3_bodyTypeCount );
-	int proxyId = b3DynamicTree_CreateProxy( bp->trees + proxyType, aabb, categoryBits, shapeIndex );
+	b3DynamicTree* tree = bp->trees + proxyType;
+	int proxyId = proxyType == b3_staticBody && bp->staticBatch
+					  ? b3DynamicTree_CreateUnlinkedProxy( tree, aabb, categoryBits, shapeIndex )
+					  : b3DynamicTree_CreateProxy( tree, aabb, categoryBits, shapeIndex );
 	int proxyKey = B3_PROXY_KEY( proxyId, proxyType );
 	if ( proxyType != b3_staticBody || forcePairCreation )
 	{

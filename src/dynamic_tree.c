@@ -756,9 +756,7 @@ static void b3RemoveLeaf( b3DynamicTree* tree, int leaf )
 	}
 }
 
-// Create a proxy in the tree as a leaf node. We return the index of the node instead of a pointer so that we can grow
-// the node pool.
-int b3DynamicTree_CreateProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData )
+static int b3CreateLeaf( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData )
 {
 	B3_ASSERT( b3IsValidAABB( aabb ) );
 
@@ -771,12 +769,33 @@ int b3DynamicTree_CreateProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t catego
 	node->height = 0;
 	node->flags = b3_allocatedNode | b3_leafNode;
 
-	bool shouldRotate = true;
-	b3InsertLeaf( tree, proxyId, shouldRotate );
-
 	tree->proxyCount += 1;
 
 	return proxyId;
+}
+
+// A leaf created by b3DynamicTree_CreateUnlinkedProxy has no parent and is not the root until
+// b3DynamicTree_RebuildAll links it.
+static inline bool b3IsUnlinked( const b3DynamicTree* tree, int proxyId )
+{
+	return proxyId != tree->root && tree->nodes[proxyId].parent == B3_NULL_INDEX;
+}
+
+// Create a proxy in the tree as a leaf node. We return the index of the node instead of a pointer so that we can grow
+// the node pool.
+int b3DynamicTree_CreateProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData )
+{
+	int proxyId = b3CreateLeaf( tree, aabb, categoryBits, userData );
+
+	bool shouldRotate = true;
+	b3InsertLeaf( tree, proxyId, shouldRotate );
+
+	return proxyId;
+}
+
+int b3DynamicTree_CreateUnlinkedProxy( b3DynamicTree* tree, b3AABB aabb, uint64_t categoryBits, uint64_t userData )
+{
+	return b3CreateLeaf( tree, aabb, categoryBits, userData );
 }
 
 void b3DynamicTree_DestroyProxy( b3DynamicTree* tree, int proxyId )
@@ -784,7 +803,10 @@ void b3DynamicTree_DestroyProxy( b3DynamicTree* tree, int proxyId )
 	B3_ASSERT( 0 <= proxyId && proxyId < tree->nodeCapacity );
 	B3_ASSERT( b3IsLeaf( tree->nodes + proxyId ) );
 
-	b3RemoveLeaf( tree, proxyId );
+	if ( b3IsUnlinked( tree, proxyId ) == false )
+	{
+		b3RemoveLeaf( tree, proxyId );
+	}
 	b3FreeNode( tree, proxyId );
 
 	B3_ASSERT( tree->proxyCount > 0 );
@@ -801,6 +823,12 @@ void b3DynamicTree_MoveProxy( b3DynamicTree* tree, int proxyId, b3AABB aabb )
 	B3_ASSERT( b3IsValidAABB( aabb ) );
 	B3_ASSERT( 0 <= proxyId && proxyId < tree->nodeCapacity );
 	B3_ASSERT( b3IsLeaf( tree->nodes + proxyId ) );
+
+	if ( b3IsUnlinked( tree, proxyId ) )
+	{
+		tree->nodes[proxyId].aabb = aabb;
+		return;
+	}
 
 	b3RemoveLeaf( tree, proxyId );
 
@@ -1099,7 +1127,7 @@ b3TreeStats b3DynamicTree_Query( const b3DynamicTree* tree, b3AABB aabb, uint64_
 {
 	b3TreeStats result = { 0 };
 
-	if ( tree->nodeCount == 0 )
+	if ( tree->root == B3_NULL_INDEX )
 	{
 		return result;
 	}
@@ -1169,7 +1197,7 @@ b3TreeStats b3DynamicTree_QueryClosest( const b3DynamicTree* tree, b3Vec3 point,
 {
 	b3TreeStats result = { 0 };
 
-	if ( tree->nodeCount == 0 )
+	if ( tree->root == B3_NULL_INDEX )
 	{
 		return result;
 	}
@@ -1254,7 +1282,7 @@ b3TreeStats b3DynamicTree_RayCast( const b3DynamicTree* tree, const b3RayCastInp
 {
 	b3TreeStats result = { 0 };
 
-	if ( tree->nodeCount == 0 )
+	if ( tree->root == B3_NULL_INDEX )
 	{
 		return result;
 	}
@@ -1365,7 +1393,7 @@ b3TreeStats b3DynamicTree_BoxCast( const b3DynamicTree* tree, const b3BoxCastInp
 {
 	b3TreeStats stats = { 0 };
 
-	if ( tree->nodeCount == 0 )
+	if ( tree->root == B3_NULL_INDEX )
 	{
 		return stats;
 	}
@@ -1959,16 +1987,9 @@ static int b3BuildTree( b3DynamicTree* tree, int leafCount )
 	return stack[0].nodeIndex;
 }
 
-// Not safe to access tree during this operation because it may grow
-int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
+// Ensure capacity for rebuild space
+static void b3ReserveRebuild( b3DynamicTree* tree, int proxyCount )
 {
-	int proxyCount = tree->proxyCount;
-	if ( proxyCount == 0 )
-	{
-		return 0;
-	}
-
-	// Ensure capacity for rebuild space
 	if ( proxyCount > tree->rebuildCapacity )
 	{
 		int newCapacity = proxyCount + proxyCount / 2;
@@ -1987,6 +2008,18 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 #endif
 		tree->rebuildCapacity = newCapacity;
 	}
+}
+
+// Not safe to access tree during this operation because it may grow
+int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
+{
+	int proxyCount = tree->proxyCount;
+	if ( proxyCount == 0 )
+	{
+		return 0;
+	}
+
+	b3ReserveRebuild( tree, proxyCount );
 
 	int leafCount = 0;
 	int stack[B3_TREE_STACK_SIZE];
@@ -2069,6 +2102,92 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 
 	B3_ASSERT( leafCount <= proxyCount );
 
+	tree->root = b3BuildTree( tree, leafCount );
+
+	b3DynamicTree_Validate( tree );
+
+	return leafCount;
+}
+
+// Grow the node pool so that the next count allocations do not move it. b3BuildTree holds a
+// pointer to the pool across its allocations.
+static void b3ReserveNodes( b3DynamicTree* tree, int count )
+{
+	int needed = tree->nodeCount + count;
+	if ( needed <= tree->nodeCapacity )
+	{
+		return;
+	}
+
+	b3TreeNode* oldNodes = tree->nodes;
+	int oldCapacity = tree->nodeCapacity;
+	int newCapacity = b3MaxInt( needed, oldCapacity + ( oldCapacity >> 1 ) );
+	tree->nodes = (b3TreeNode*)b3Alloc( newCapacity * sizeof( b3TreeNode ) );
+	memcpy( tree->nodes, oldNodes, oldCapacity * sizeof( b3TreeNode ) );
+	memset( tree->nodes + oldCapacity, 0, ( newCapacity - oldCapacity ) * sizeof( b3TreeNode ) );
+	b3Free( oldNodes, oldCapacity * sizeof( b3TreeNode ) );
+
+	// Chain the new nodes in front of the existing free list.
+	for ( int i = oldCapacity; i < newCapacity - 1; ++i )
+	{
+		tree->nodes[i].next = i + 1;
+	}
+	tree->nodes[newCapacity - 1].next = tree->freeList;
+	tree->freeList = oldCapacity;
+	tree->nodeCapacity = newCapacity;
+}
+
+// Unlinked leaves are reachable from no root, so gather leaves by scanning the node pool in index
+// order instead of walking the tree. Every internal node is freed and rebuilt.
+int b3DynamicTree_RebuildAll( b3DynamicTree* tree )
+{
+	int proxyCount = tree->proxyCount;
+	if ( proxyCount == 0 )
+	{
+		tree->root = B3_NULL_INDEX;
+		return 0;
+	}
+
+	b3ReserveRebuild( tree, proxyCount );
+
+	int* leafIndices = tree->leafIndices;
+#if B3_TREE_HEURISTIC == 0
+	b3Vec3* leafCenters = tree->leafCenters;
+#else
+	b3AABB* leafBoxes = tree->leafBoxes;
+#endif
+
+	b3TreeNode* nodes = tree->nodes;
+	int capacity = tree->nodeCapacity;
+	int leafCount = 0;
+	for ( int i = 0; i < capacity; ++i )
+	{
+		b3TreeNode* node = nodes + i;
+		if ( b3IsAllocated( node ) == false )
+		{
+			continue;
+		}
+
+		if ( b3IsLeaf( node ) == false )
+		{
+			b3FreeNode( tree, i );
+			continue;
+		}
+
+		leafIndices[leafCount] = i;
+#if B3_TREE_HEURISTIC == 0
+		leafCenters[leafCount] = b3AABB_Center( node->aabb );
+#else
+		leafBoxes[leafCount] = node->aabb;
+#endif
+		leafCount += 1;
+		node->parent = B3_NULL_INDEX;
+	}
+
+	B3_ASSERT( leafCount == proxyCount );
+
+	// A full binary tree over leafCount leaves has leafCount - 1 internal nodes.
+	b3ReserveNodes( tree, leafCount - 1 );
 	tree->root = b3BuildTree( tree, leafCount );
 
 	b3DynamicTree_Validate( tree );

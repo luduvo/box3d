@@ -807,6 +807,18 @@ static void b3RecDispatch_WorldRebuildStaticTree( const b3RecArgs_WorldRebuildSt
 	b3World_RebuildStaticTree( rdr->replayWorldId );
 }
 
+static void b3RecDispatch_WorldBeginStaticBatch( const b3RecArgs_WorldBeginStaticBatch* a, b3RecReader* rdr )
+{
+	(void)a;
+	b3World_BeginStaticBatch( rdr->replayWorldId );
+}
+
+static void b3RecDispatch_WorldEndStaticBatch( const b3RecArgs_WorldEndStaticBatch* a, b3RecReader* rdr )
+{
+	(void)a;
+	b3World_EndStaticBatch( rdr->replayWorldId );
+}
+
 static void b3RecDispatch_WorldEnableSpeculative( const b3RecArgs_WorldEnableSpeculative* a, b3RecReader* rdr )
 {
 	b3World_EnableSpeculative( rdr->replayWorldId, a->flag );
