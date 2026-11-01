@@ -1989,8 +1989,6 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 	}
 
 	int leafCount = 0;
-	int stack[B3_TREE_STACK_SIZE];
-	int stackCount = 0;
 
 	int nodeIndex = tree->root;
 	b3TreeNode* nodes = tree->nodes;
@@ -1999,6 +1997,13 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 	// These are the nodes that get sorted to rebuild the tree.
 	// I'm using indices because the node pool may grow during the build.
 	int* leafIndices = tree->leafIndices;
+
+	// Identical boxes inserted one by one chain into a branch as deep as their count, so the
+	// gather stack cannot have a fixed size. It grows down from the end of leafIndices instead.
+	// Every stacked node roots a subtree that still holds a build leaf, so leafCount + stackCount
+	// never exceeds the final leaf count, which is at most proxyCount <= rebuildCapacity.
+	int* stack = leafIndices + tree->rebuildCapacity;
+	int stackCount = 0;
 
 #if B3_TREE_HEURISTIC == 0
 	b3Vec3* leafCenters = tree->leafCenters;
@@ -2033,11 +2038,9 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 			// Handle children
 			nodeIndex = node->children.child1;
 
-			B3_ASSERT( stackCount < B3_TREE_STACK_SIZE );
-			if ( stackCount < B3_TREE_STACK_SIZE )
-			{
-				stack[stackCount++] = node->children.child2;
-			}
+			stackCount += 1;
+			B3_ASSERT( leafCount + stackCount <= proxyCount );
+			stack[-stackCount] = node->children.child2;
 
 			node = nodes + nodeIndex;
 
@@ -2052,7 +2055,8 @@ int b3DynamicTree_Rebuild( b3DynamicTree* tree, bool fullBuild )
 			break;
 		}
 
-		nodeIndex = stack[--stackCount];
+		nodeIndex = stack[-stackCount];
+		stackCount -= 1;
 		node = nodes + nodeIndex;
 	}
 
