@@ -28,6 +28,17 @@ typedef struct b3SensorQueryContext
 static bool b3OverlapSensor( b3Shape* sensorShape, b3Transform sensorTransform, b3Shape* visitorShape,
 							 b3Transform visitorTransform )
 {
+	if ( visitorShape->type == b3_meshShape || visitorShape->type == b3_heightShape ||
+		 visitorShape->type == b3_compoundShape )
+	{
+		if ( sensorShape->type == b3_meshShape || sensorShape->type == b3_heightShape ||
+			 sensorShape->type == b3_compoundShape )
+		{
+			return false;
+		}
+		return b3OverlapSensor( visitorShape, visitorTransform, sensorShape, sensorTransform );
+	}
+
 	b3ShapeType type = sensorShape->type;
 
 	b3ShapeProxy proxy = b3MakeShapeProxy( visitorShape );
